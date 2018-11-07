@@ -1,6 +1,11 @@
 @echo off
-set _Debug=0
+:: Licenses used for converting Office 365 ProPlus:
+:: set _O365asO2019=0 -> use Office 2016 Mondo (if you want Office 365 features)
+:: set _O365asO2019=1 -> use Office 2019 ProPlus (should only be for Windows 7 and 8.1)
+set _O365asO2019=0
 
+
+set _Debug=0
 %windir%\system32\reg.exe query "HKU\S-1-5-19" >nul 2>&1 || (
 set "msg=ERROR: right click on the script and 'Run as administrator'"
 goto :end
@@ -139,7 +144,7 @@ set _%%a=0
 for %%a in (Mondo,%O19Ids%,%A19Ids%,Access2019,SkypeforBusiness2019,Professional2019,O365ProPlus,Professional,%SkuIds%,%AppIds%,Access,SkypeforBusiness) do (
 echo %ProductIds%| findstr /I /C:"%%aRetail" %_Nul_1% && set _%%a=1
 )
-wmic path %spp% get LicenseFamily > sppchk.txt
+wmic path %spp% get LicenseFamily > sppchk.txt 2>&1
 for %%a in (Mondo,%O19Ids%,%A19Ids%,Access2019,SkypeforBusiness2019,%SkuIds%,%AppIds%,Access,SkypeforBusiness) do (
 echo %ProductIds%| findstr /I /C:"%%aVolume" %_Nul_1% && (
   find /i "%%aVL_KMS_Client" sppchk.txt %_Nul_1% && (set _%%a=0) || (set _%%a=1)
@@ -158,9 +163,15 @@ call :InsLic Mondo
 goto :GVLK
 )
 if !_O365ProPlus! equ 1 (
-echo O365ProPlus Suite -^> Mondo Licenses
-echo.
-call :InsLic Mondo
+  if !_O365asO2019! equ 1 (
+  echo O365ProPlus Suite -^> ProPlus2019 Licenses
+  echo.
+  call :InsLic ProPlus2019
+  ) else (
+  echo O365ProPlus Suite -^> Mondo Licenses
+  echo.
+  call :InsLic Mondo
+  )
 )
 if !_ProPlus2019! equ 1 if !_O365ProPlus! equ 0 (
 echo ProPlus2019 Suite
@@ -168,9 +179,9 @@ echo.
 call :InsLic ProPlus2019
 )
 if !_ProPlus! equ 1 if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 (
-echo ProPlus Suite
+echo ProPlus Suite -^> ProPlus2019 Licenses
 echo.
-call :InsLic ProPlus
+call :InsLic ProPlus2019
 )
 if !_Professional2019! equ 1 if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 (
 echo Professional2019 Suite -^> ProPlus2019 Licenses
@@ -178,9 +189,9 @@ echo.
 call :InsLic ProPlus2019
 )
 if !_Professional! equ 1 if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 (
-echo Professional Suite -^> ProPlus Licenses
+echo Professional Suite -^> ProPlus2019 Licenses
 echo.
-call :InsLic ProPlus
+call :InsLic ProPlus2019
 )
 if !_Standard2019! equ 1 if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 (
 echo Standard2019 Suite
@@ -188,9 +199,9 @@ echo.
 call :InsLic Standard2019
 )
 if !_Standard! equ 1 if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 if !_Standard2019! equ 0 (
-echo Standard Suite
+echo Standard Suite -^> Standard2019 Licenses
 echo.
-call :InsLic Standard
+call :InsLic Standard2019
 )
 for %%a in (ProjectPro2019,VisioPro2019,ProjectStd2019,VisioStd2019) do if !_%%a! equ 1 (
 echo %%a SKU
@@ -198,16 +209,25 @@ echo.
 call :InsLic %%a
 )
 for %%a in (ProjectPro,ProjectStd,VisioPro,VisioStd) do if !_%%a! equ 1 (
-if !_%%a2019! equ 0 (echo %%a SKU&echo.&call :InsLic %%aX)
+if !_%%a2019! equ 0 (echo %%a SKU -^> %%a2019 Licenses&echo.&call :InsLic %%a2019)
 )
-for %%a in (%A19Ids%,%AppIds%) do if !_%%a! equ 1 (
+for %%a in (%A19Ids%,OneNote) do if !_%%a! equ 1 (
 if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 if !_Standard2019! equ 0 if !_Standard! equ 0 (echo %%a App&echo.&call :InsLic %%a)
 )
-for %%a in (Access2019,Access) do if !_%%a! equ 1 (
+for %%a in (Excel,Outlook,PowerPoint,Publisher,Word) do if !_%%a! equ 1 (
+if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 if !_Standard2019! equ 0 if !_Standard! equ 0 (echo %%a App&echo.&call :InsLic %%a2019)
+)
+for %%a in (Access2019) do if !_%%a! equ 1 (
 if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 (echo %%a App&echo.&call :InsLic %%a)
 )
-for %%a in (SkypeforBusiness2019,SkypeforBusiness) do if !_%%a! equ 1 (
+for %%a in (Access) do if !_%%a! equ 1 (
+if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 (echo %%a App&echo.&call :InsLic %%a2019)
+)
+for %%a in (SkypeforBusiness2019) do if !_%%a! equ 1 (
 if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 (echo %%a App&echo.&call :InsLic %%a)
+)
+for %%a in (SkypeforBusiness) do if !_%%a! equ 1 (
+if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 (echo %%a App&echo.&call :InsLic %%a2019)
 )
 goto :GVLK
 
@@ -253,7 +273,7 @@ echo.
 exit /b
 
 :end
-del /f /q sppchk.txt %_Nul_1_2%
+del /f /q sppchk.txt >nul 2>&1
 echo.
 echo ============================================================
 echo %msg%
