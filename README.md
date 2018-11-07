@@ -1,4 +1,4 @@
-# Convert Office 2016/ 2019 ClickToRun installation licensing from Retail to Volume
+# Convert Office 2016/ 2019 /O365 ClickToRun installation licensing from Retail to Volume
 
 which then can be activated easily using various KMS solutions
 
@@ -34,7 +34,7 @@ to workaround that, follow these steps:
  1) install desired SKU: ProjectProRetail, ProjectStdRetail, VisioProRetail, VisioStdRetail  
  2) run Convert-C2R.cmd  
  
-# Office c2r转换vol批处理
+# Office 2016 /2019 /O365 C2R转换VOL批处理
  - 该脚本用于转换c2r产品（office2016/ 2019 / O365）到VOL版本。  
  - 请用右键管理员运行，批处理会清除当前所有证书并根据对应产品ID导入VOL证书。  
  - Mondo证书覆盖所有产品，因此O365默认会安装Mondo证书，安装后会显示2016 Mondo，但它仍然是Office 365并具有Office 365的特性。而Professional默认会安装ProPlus证书。其他产品ID会安装对应产品证书。  
