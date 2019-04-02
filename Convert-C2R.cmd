@@ -1,15 +1,28 @@
 @echo off
 :: Licenses used for converting Office 365 ProPlus:
-:: set _O365asO2019=0 -> use Office 2016 Mondo (if you want Office 365 features)
-:: set _O365asO2019=1 -> use Office 2019 ProPlus (should only be for Windows 7 and 8.1)
+:: set _O365asO2019=0 -> use Office 2016 Mondo (if you want some Office 365 features)
+:: set _O365asO2019=1 -> use Office 2019 ProPlus (should only be used for Windows 7 and 8.1)
 set _O365asO2019=0
 
 
 set _Debug=0
-%windir%\system32\reg.exe query "HKU\S-1-5-19" >nul 2>&1 || (
+set "SysPath=%Windir%\System32"
+if exist "%Windir%\Sysnative\reg.exe" (set "SysPath=%Windir%\Sysnative")
+set "Path=%SysPath%;%Windir%;%SysPath%\Wbem;%SysPath%\WindowsPowerShell\v1.0\"
+fsutil dirty query %systemdrive% >nul 2>&1 || (
 set "msg=ERROR: right click on the script and 'Run as administrator'"
 goto :end
 )
+
+set xOS=x64
+if /i %PROCESSOR_ARCHITECTURE%==x86 (if "%PROCESSOR_ARCHITEW6432%"=="" set xOS=x86)
+set "_tempdir=%SystemRoot%\Temp"
+set "_logpath=%~dpn0"
+set "_workdir=%~dp0"
+if "%_workdir:~-1%"=="\" set "_workdir=%_workdir:~0,-1%"
+dir /b /adr "%_workdir%" 1>nul 2>nul && set "_logpath=%_tempdir%\%~n0"
+if "%_workdir:~0,2%"=="\\" set "_logpath=%_tempdir%\%~n0"
+setlocal EnableExtensions EnableDelayedExpansion
 
 if %_Debug% EQU 0 (
   set "_Nul_1=1>nul"
@@ -17,7 +30,6 @@ if %_Debug% EQU 0 (
   set "_Nul_2e=2^>nul"
   set "_Nul_1_2=1>nul 2>nul"
   call :Begin
-  exit /b
 ) else (
   set "_Nul_1="
   set "_Nul_2="
@@ -28,18 +40,17 @@ if %_Debug% EQU 0 (
   echo The window will be closed when finished
   @echo on
   @prompt $G
-  @call :Begin >"%~dpn0.tmp" 2>&1 &cmd /u /c type "%~dpn0.tmp">"%~dpn0_Debug.log"&del "%~dpn0.tmp"
+  @call :Begin >"!_logpath!.tmp" 2>&1 &cmd /u /c type "!_logpath!.tmp">"!_logpath!_Debug.log"&del "!_logpath!.tmp"
 )
-exit
+exit /b
 
 :Begin
 color 1F
 title Office Click-to-Run Retail-to-Volume
-for /f "tokens=6 delims=[]. " %%G in ('ver') do set winbuild=%%G
-if /i "%PROCESSOR_ARCHITECTURE%" equ "AMD64" (set arch=x64) else (set arch=x86)
+for /f "tokens=6 delims=[]. " %%# in ('ver') do set winbuild=%%#
 set "_SLMGR=%SystemRoot%\System32\slmgr.vbs"
 
-if %winbuild% LSS 7601 (
+if %winbuild% lss 7601 (
 set "msg=Windows 7 SP1 is the minimum supported OS..."
 goto :end
 )
@@ -87,18 +98,20 @@ if "%ProductIds%" equ "" (
 set "msg=Could not detect Office ProductIDs..."
 goto :end
 )
-if not exist "%_LicensesPath%\*.xrm-ms" (
+if not exist "!_LicensesPath!\*.xrm-ms" (
 set "msg=Could not detect Office Licenses files..."
 goto :end
 )
-if not exist "%_Integrator%" (
+if not exist "!_Integrator!" (
 set "msg=Could not detect Office Licenses Integrator..."
 goto :end
 )
-if %winbuild% lss 9200 if not exist "%_OSPP%" (
+if %winbuild% lss 9200 if not exist "!_OSPP!" (
 set "msg=Could not detect Licensing tool OSPP.vbs..."
 goto :end
 )
+if %winbuild% geq 10240 set _O365asO2019=0
+if exist "!_LicensesPath!\Word2019VL_KMS_Client_AE*.xrm-ms" (set "tag=2019") else (set "tag=")
 
 :Check
 echo.
@@ -112,7 +125,7 @@ set sps=SoftwareLicensingService
 set spp=OfficeSoftwareProtectionProduct
 set sps=OfficeSoftwareProtectionService
 )
-for /f "tokens=2 delims==" %%a in ('"wmic path %sps% get version /value" %_Nul_2e%') do set ver=%%a
+for /f "tokens=2 delims==" %%# in ('"wmic path %sps% get version /value" %_Nul_2e%') do set ver=%%#
 wmic path %spp% where (Description like '%%KMSCLIENT%%' AND not LicenseFamily='Office16MondoR_KMS_Automation') get LicenseFamily %_Nul_2% | findstr /i /C:"Office" %_Nul_1% && (set _KMS=1) || (set _KMS=0)
 wmic path %spp% where (Description like '%%TIMEBASED%%') get LicenseFamily %_Nul_2% | findstr /i /C:"Office" %_Nul_1% && (set _Time=1) || (set _Time=0)
 wmic path %spp% where (Description like '%%Grace%%') get LicenseFamily %_Nul_2% | findstr /i /C:"Office" %_Nul_1% && (set _Grace=1) || (set _Grace=0)
@@ -126,115 +139,197 @@ echo.
 echo ============================================================
 echo Cleaning Current Office Licenses...
 echo ============================================================
-cd /d "%~dp0"
-%arch%\cleanospp.exe -Licenses %_Nul_1_2%
+"!_workdir!\!xOS!\cleanospp.exe" -Licenses %_Nul_1_2%
 echo.
 echo ============================================================
 echo Installing Office Volume Licenses...
 echo ============================================================
 echo.
 set O19Ids=ProPlus2019,ProjectPro2019,VisioPro2019,Standard2019,ProjectStd2019,VisioStd2019
-set SkuIds=ProjectPro,VisioPro,Standard,ProjectStd,VisioStd
+set O16Ids=ProjectPro,VisioPro,Standard,ProjectStd,VisioStd
 set A19Ids=Excel2019,Outlook2019,PowerPoint2019,Publisher2019,Word2019
-set AppIds=Excel,OneNote,Outlook,PowerPoint,Publisher,Word
+set A16Ids=Excel,OneNote,Outlook,PowerPoint,Publisher,Word
 
-for %%a in (Mondo,%O19Ids%,%A19Ids%,Access2019,SkypeforBusiness2019,Professional2019,O365ProPlus,Professional,%SkuIds%,%AppIds%,Access,SkypeforBusiness,ProPlus) do (
+echo %ProductIds%> "!_tempdir!\ProductIds.txt"
+for %%a in (Mondo,%O19Ids%,%A19Ids%,Access2019,SkypeforBusiness2019,Professional2019,HomeBusiness2019,HomeStudent2019,O365ProPlus,O365Business,O365SmallBusPrem,O365HomePrem,O365EduCloud,Professional,HomeBusiness,HomeStudent,%O16Ids%,%A16Ids%,Access,SkypeforBusiness,ProPlus) do (
 set _%%a=0
 )
-for %%a in (Mondo,%O19Ids%,%A19Ids%,Access2019,SkypeforBusiness2019,Professional2019,O365ProPlus,Professional,%SkuIds%,%AppIds%,Access,SkypeforBusiness) do (
-echo %ProductIds%| findstr /I /C:"%%aRetail" %_Nul_1% && set _%%a=1
+for %%a in (Mondo,%O19Ids%,%A19Ids%,Access2019,SkypeforBusiness2019,Professional2019,HomeBusiness2019,HomeStudent2019,O365ProPlus,O365Business,O365SmallBusPrem,O365HomePrem,O365EduCloud,Professional,HomeBusiness,HomeStudent,%O16Ids%,%A16Ids%,Access,SkypeforBusiness) do (
+findstr /I /C:"%%aRetail" "!_tempdir!\ProductIds.txt" %_Nul_1% && set _%%a=1
 )
-wmic path %spp% get LicenseFamily > sppchk.txt 2>&1
-for %%a in (Mondo,%O19Ids%,%A19Ids%,Access2019,SkypeforBusiness2019,%SkuIds%,%AppIds%,Access,SkypeforBusiness) do (
-echo %ProductIds%| findstr /I /C:"%%aVolume" %_Nul_1% && (
-  find /i "%%aVL_KMS_Client" sppchk.txt %_Nul_1% && (set _%%a=0) || (set _%%a=1)
+wmic path %spp% get LicenseFamily > "!_tempdir!\sppchk.txt" 2>&1
+for %%a in (Mondo,%O19Ids%,%A19Ids%,Access2019,SkypeforBusiness2019,%O16Ids%,%A16Ids%,Access,SkypeforBusiness) do (
+findstr /I /C:"%%aVolume" "!_tempdir!\ProductIds.txt" %_Nul_1% && (
+  find /i "%%aVL_KMS_Client" "!_tempdir!\sppchk.txt" %_Nul_1% && (set _%%a=0) || (set _%%a=1)
   )
 )
 reg query %_PRIDs%\ProPlusRetail.16 %_Nul_1_2% && set _ProPlus=1
 reg query %_PRIDs%\ProPlusVolume.16 %_Nul_1_2% && (
-find /i "Office16ProPlusVL_KMS_Client" sppchk.txt %_Nul_1% && (set _ProPlus=0) || (set _ProPlus=1)
+find /i "Office16ProPlusVL_KMS_Client" "!_tempdir!\sppchk.txt" %_Nul_1% && (set _ProPlus=0) || (set _ProPlus=1)
 )
+del /f /q "!_tempdir!\sppchk.txt" >nul 2>&1
+del /f /q "!_tempdir!\ProductIds.txt" >nul 2>&1
 
-setlocal EnableDelayedExpansion
 if !_Mondo! equ 1 (
 echo Mondo Suite
 echo.
 call :InsLic Mondo
-goto :GVLK
 )
 if !_O365ProPlus! equ 1 (
-  if !_O365asO2019! equ 1 (
-  echo O365ProPlus Suite -^> ProPlus2019 Licenses
+  if !_Mondo! equ 0 if !_O365asO2019! equ 1 (
+  echo O365ProPlus Suite -^> ProPlus%tag% Licenses
   echo.
-  call :InsLic ProPlus2019
+  call :InsLic ProPlus%tag%
   ) else (
   echo O365ProPlus Suite -^> Mondo Licenses
   echo.
-  call :InsLic Mondo
+  call :InsLic O365ProPlus DRNV7-VGMM2-B3G9T-4BF84-VMFTK
+  if !_Mondo! equ 0 call :InsLic Mondo
   )
 )
+if !_O365Business! equ 1 if !_O365ProPlus! equ 0 (
+set _O365ProPlus=1
+echo O365Business Suite -^> Mondo Licenses
+echo.
+call :InsLic O365Business NCHRJ-3VPGW-X73DM-6B36K-3RQ6B
+if !_Mondo! equ 0 call :InsLic Mondo
+)
+if !_O365SmallBusPrem! equ 1 if !_O365Business! equ 0 if !_O365ProPlus! equ 0 (
+set _O365ProPlus=1
+echo O365SmallBusPrem Suite -^> Mondo Licenses
+echo.
+call :InsLic O365SmallBusPrem 3FBRX-NFP7C-6JWVK-F2YGK-H499R
+if !_Mondo! equ 0 call :InsLic Mondo
+)
+if !_O365HomePrem! equ 1 if !_O365SmallBusPrem! equ 0 if !_O365Business! equ 0 if !_O365ProPlus! equ 0 (
+set _O365ProPlus=1
+echo O365HomePrem Suite -^> Mondo Licenses
+echo.
+call :InsLic O365HomePrem 9FNY8-PWWTY-8RY4F-GJMTV-KHGM9
+if !_Mondo! equ 0 call :InsLic Mondo
+)
+if !_O365EduCloud! equ 1 if !_O365HomePrem! equ 0 if !_O365SmallBusPrem! equ 0 if !_O365Business! equ 0 if !_O365ProPlus! equ 0 (
+set _O365ProPlus=1
+echo O365EduCloud Suite -^> Mondo Licenses
+echo.
+call :InsLic O365EduCloud 8843N-BCXXD-Q84H8-R4Q37-T3CPT
+if !_Mondo! equ 0 call :InsLic Mondo
+)
+if !_Mondo! equ 1 if !_O365ProPlus! equ 0 (
+call :InsLic O365ProPlus DRNV7-VGMM2-B3G9T-4BF84-VMFTK
+goto :GVLK
+)
 if !_ProPlus2019! equ 1 if !_O365ProPlus! equ 0 (
-echo ProPlus2019 Suite
+echo ProPlus2019 Suite -^> ProPlus%tag% Licenses
 echo.
-call :InsLic ProPlus2019
+call :InsLic ProPlus%tag%
 )
-if !_ProPlus! equ 1 if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 (
-echo ProPlus Suite -^> ProPlus2019 Licenses
+if !_ProPlus! equ 1 if !_O365ProPlus! equ 0 if !_ProPlus2019! equ 0 (
+echo ProPlus 2016 Suite -^> ProPlus%tag% Licenses
 echo.
-call :InsLic ProPlus2019
+call :InsLic ProPlus%tag%
 )
-if !_Professional2019! equ 1 if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 (
-echo Professional2019 Suite -^> ProPlus2019 Licenses
+if !_Professional2019! equ 1 if !_O365ProPlus! equ 0 if !_ProPlus2019! equ 0 if !_ProPlus! equ 0 (
+echo Professional2019 Suite -^> ProPlus%tag% Licenses
 echo.
-call :InsLic ProPlus2019
+call :InsLic ProPlus%tag%
 )
-if !_Professional! equ 1 if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 (
-echo Professional Suite -^> ProPlus2019 Licenses
+if !_Professional! equ 1 if !_O365ProPlus! equ 0 if !_ProPlus2019! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 (
+echo Professional 2016 Suite -^> ProPlus%tag% Licenses
 echo.
-call :InsLic ProPlus2019
+call :InsLic ProPlus%tag%
 )
-if !_Standard2019! equ 1 if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 (
-echo Standard2019 Suite
-echo.
-call :InsLic Standard2019
-)
-if !_Standard! equ 1 if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 if !_Standard2019! equ 0 (
-echo Standard Suite -^> Standard2019 Licenses
+if !_Standard2019! equ 1 if !_O365ProPlus! equ 0 if !_ProPlus2019! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 (
+echo Standard2019 Suite -^> Standard2019 Licenses
 echo.
 call :InsLic Standard2019
 )
-for %%a in (ProjectPro2019,VisioPro2019,ProjectStd2019,VisioStd2019) do if !_%%a! equ 1 (
-echo %%a SKU
+if !_Standard! equ 1 if !_O365ProPlus! equ 0 if !_ProPlus2019! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 if !_Standard2019! equ 0 (
+echo Standard 2016 Suite -^> Standard%tag% Licenses
 echo.
-call :InsLic %%a
+call :InsLic Standard%tag%
 )
-for %%a in (ProjectPro,ProjectStd,VisioPro,VisioStd) do if !_%%a! equ 1 (
-if !_%%a2019! equ 0 (echo %%a SKU -^> %%a2019 Licenses&echo.&call :InsLic %%a2019)
+for %%a in (ProjectPro,VisioPro,ProjectStd,VisioStd) do if !_%%a2019! equ 1 (
+echo %%a2019 SKU -^> %%a%tag% Licenses
+echo.
+if defined tag (call :InsLic %%a2019) else (call :InsLic %%a)
+)
+for %%a in (ProjectPro,VisioPro,ProjectStd,VisioStd) do if !_%%a! equ 1 (
+if !_%%a2019! equ 0 (
+  echo %%a 2016 SKU -^> %%a%tag% Licenses
+  echo.
+  call :InsLic %%a%tag%
+  )
+)
+for %%a in (HomeBusiness2019,HomeStudent2019) do if !_%%a! equ 1 (
+if !_O365ProPlus! equ 0 if !_ProPlus2019! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 if !_Standard2019! equ 0 if !_Standard! equ 0 (
+  set _Standard2019=1
+  echo %%a Suite -^> Standard2019 Licenses
+  echo.
+  call :InsLic Standard2019
+  )
+)
+for %%a in (HomeBusiness,HomeStudent) do if !_%%a! equ 1 (
+if !_O365ProPlus! equ 0 if !_ProPlus2019! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 if !_Standard2019! equ 0 if !_Standard! equ 0 if !_%%a2019! equ 0 (
+  set _Standard2019=1
+  echo %%a 2016 Suite -^> Standard%tag% Licenses
+  echo.
+  call :InsLic Standard%tag%
+  )
 )
 for %%a in (%A19Ids%,OneNote) do if !_%%a! equ 1 (
-if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 if !_Standard2019! equ 0 if !_Standard! equ 0 (echo %%a App&echo.&call :InsLic %%a)
+if !_O365ProPlus! equ 0 if !_ProPlus2019! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 if !_Standard2019! equ 0 if !_Standard! equ 0 (
+  echo %%a App
+  echo.
+  call :InsLic %%a
+  )
 )
 for %%a in (Excel,Outlook,PowerPoint,Publisher,Word) do if !_%%a! equ 1 (
-if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 if !_Standard2019! equ 0 if !_Standard! equ 0 (echo %%a App&echo.&call :InsLic %%a2019)
+if !_O365ProPlus! equ 0 if !_ProPlus2019! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 if !_Standard2019! equ 0 if !_Standard! equ 0 if !_%%a2019! equ 0 (
+  echo %%a App
+  echo.
+  call :InsLic %%a%tag%
+  )
 )
 for %%a in (Access2019) do if !_%%a! equ 1 (
-if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 (echo %%a App&echo.&call :InsLic %%a)
+if !_O365ProPlus! equ 0 if !_ProPlus2019! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 (
+  echo %%a App
+  echo.
+  call :InsLic %%a
+  )
 )
 for %%a in (Access) do if !_%%a! equ 1 (
-if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 (echo %%a App&echo.&call :InsLic %%a2019)
+if !_O365ProPlus! equ 0 if !_ProPlus2019! equ 0 if !_ProPlus! equ 0 if !_Professional2019! equ 0 if !_Professional! equ 0 if !_%%a2019! equ 0 (
+  echo %%a App
+  echo.
+  call :InsLic %%a%tag%
+  )
 )
 for %%a in (SkypeforBusiness2019) do if !_%%a! equ 1 (
-if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 (echo %%a App&echo.&call :InsLic %%a)
+if !_O365ProPlus! equ 0 if !_ProPlus2019! equ 0 if !_ProPlus! equ 0 (
+  echo %%a App
+  echo.
+  call :InsLic %%a
+  )
 )
 for %%a in (SkypeforBusiness) do if !_%%a! equ 1 (
-if !_ProPlus2019! equ 0 if !_O365ProPlus! equ 0 if !_ProPlus! equ 0 (echo %%a App&echo.&call :InsLic %%a2019)
+if !_O365ProPlus! equ 0 if !_ProPlus2019! equ 0 if !_ProPlus! equ 0 if !_%%a2019! equ 0 (
+  echo %%a App
+  echo.
+  call :InsLic %%a%tag%
+  )
 )
 goto :GVLK
 
 :InsLic
 set "_ID=%1Volume"
+set "_pkey="
+if not "%2"=="" (
+set "_ID=%1Retail"
+set "_pkey=PidKey=%2"
+)
 reg delete %_Config% /f /v %_ID%.OSPPReady %_Nul_1_2%
-"%_Integrator%" /I /License PRIDName=%_ID%.16 PackageGUID="%_GUID%" PackageRoot="%_InstallRoot%" %_Nul_1%
+"!_Integrator!" /I /License PRIDName=%_ID%.16 %_pkey% PackageGUID="%_GUID%" PackageRoot="!_InstallRoot!" %_Nul_1%
 reg add %_Config% /f /v %_ID%.OSPPReady /t REG_SZ /d 1 %_Nul_1%
 reg query %_Config% /v ProductReleaseIds | findstr /I "%_ID%" %_Nul_1%
 if %errorlevel% neq 0 (
@@ -247,7 +342,7 @@ echo ============================================================
 echo Installing Missing KMS Client Keys...
 echo ============================================================
 echo.
-for /f "tokens=2 delims==" %%G in ('"wmic path %spp% where (Description like '%%KMSCLIENT%%' AND LicenseFamily like 'Office%%' AND PartialProductKey=NULL) get ID /value" %_Nul_2e%') do (set app=%%G&call :InsKey)
+for /f "tokens=2 delims==" %%# in ('"wmic path %spp% where (Description like '%%KMSCLIENT%%' AND LicenseFamily like 'Office%%' AND PartialProductKey=NULL) get ID /value" %_Nul_2e%') do (set app=%%#&call :InsKey)
 if exist "%SystemRoot%\System32\spp\store_test\2.0\tokens.dat" (
 echo.
 echo ============================================================
@@ -265,15 +360,19 @@ if /i '%app%' equ '0bc88885-718c-491d-921f-6f214349e79c' exit /b
 if /i '%app%' equ 'fc7c4d0c-2e85-4bb9-afd4-01ed1476b5e9' exit /b
 if /i '%app%' equ '500f6619-ef93-4b75-bcb4-82819998a3ca' exit /b
 set "key="
-for /f "tokens=2 delims==" %%A in ('"wmic path %spp% where ID='%app%' get LicenseFamily /value"') do echo %%A
-for /f %%A in ('cscript //Nologo x86\key.vbs %app%') do set "key=%%A"
+for /f "tokens=2 delims==" %%# in ('"wmic path %spp% where ID='%app%' get LicenseFamily /value"') do echo %%#
+call "!_workdir!\x86\keyOff.cmd" %app%
 if "%key%" equ "" (echo Could not find matching gVLK&echo.&exit /b)
 wmic path %sps% where version='%ver%' call InstallProductKey ProductKey="%key%" %_Nul_1_2%
+set ERRORCODE=%ERRORLEVEL%
+if %ERRORCODE% neq 0 (
+cmd /c exit /b %ERRORCODE%
+echo Failed: 0x!=ExitCode!
+)
 echo.
 exit /b
 
 :end
-del /f /q sppchk.txt >nul 2>&1
 echo.
 echo ============================================================
 echo %msg%
