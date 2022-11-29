@@ -2,7 +2,7 @@
 :: Licenses used for converting Office 365 ProPlus:
 :: set _O365asO2019=0 -> use Office 2016 Mondo (if you want some Office 365 features)
 :: set _O365asO2019=1 -> use Office 2019 ProPlus (should only be used for Windows 7 and 8.1)
-set _O365asO2019=0
+set _O365asO2019=1
 
 
 set _Debug=0
